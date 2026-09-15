@@ -1,0 +1,17 @@
+# Controle de versao e CI
+.git
+.gitignore
+.github
+
+# Artefatos de build locais
+target
+.cpcache
+.clj-kondo
+.lsp
+
+# Documentacao e editores
+*.md
+LICENSE
+.idea
+.vscode
+*.iml
