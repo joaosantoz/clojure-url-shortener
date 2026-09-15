@@ -1,9 +1,11 @@
 name: CI
 
-# Integracao continua: roda a cada push e a cada pull request para a main.
+# Integracao continua: roda em toda pull request para a main e em todo push na
+# propria main. Limitar o push a main evita que uma branch com PR aberta dispare
+# o mesmo workflow duas vezes.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
