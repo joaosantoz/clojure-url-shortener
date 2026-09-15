@@ -1,0 +1,88 @@
+name: CI
+
+# Integracao continua: roda em toda pull request para a main e em todo push na
+# propria main. Limitar o push a main evita que uma branch com PR aberta dispare
+# o mesmo workflow duas vezes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    name: Testes unitarios
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Instalar Clojure CLI
+        uses: DeLaGuardo/setup-clojure@13.7.0
+        with:
+          cli: latest
+
+      - name: Cache das dependencias
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: cljdeps-${{ hashFiles('deps.edn') }}
+          restore-keys: cljdeps-
+
+      - name: Rodar a suite de testes
+        run: clojure -X:test
+
+  imagem-docker:
+    name: Build da imagem Docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir a imagem (sem publicar)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: url-shortener:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Subir o container e validar o /health
+        run: |
+          docker run -d --name url-shortener -p 3000:3000 url-shortener:ci
+          for tentativa in $(seq 1 20); do
+            if curl -fsS http://localhost:3000/health; then
+              echo ""
+              echo "Container respondeu com sucesso."
+              exit 0
+            fi
+            echo "Aguardando o container subir... ($tentativa/20)"
+            sleep 3
+          done
+          echo "O container nao respondeu a tempo. Logs:"
+          docker logs url-shortener
+          exit 1
+
+      - name: Encerrar o container
+        if: always()
+        run: docker rm -f url-shortener || true

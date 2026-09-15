@@ -1,0 +1,24 @@
+{:paths ["src"]
+
+ :deps {org.clojure/clojure       {:mvn/version "1.12.0"}
+        ring/ring-core            {:mvn/version "1.12.2"}
+        ring/ring-jetty-adapter   {:mvn/version "1.12.2"}
+        cheshire/cheshire         {:mvn/version "5.13.0"}}
+
+ :aliases
+ {;; clojure -M:run  -> sobe o servidor HTTP em modo de desenvolvimento
+  :run
+  {:main-opts ["-m" "url-shortener.core"]}
+
+  ;; clojure -X:test -> roda a suite de testes (usada pelo CI e pelo Dockerfile)
+  :test
+  {:extra-paths ["test"]
+   :extra-deps  {io.github.cognitect-labs/test-runner
+                 {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+   :exec-fn     cognitect.test-runner.api/test
+   :exec-args   {:dirs ["test"]}}
+
+  ;; clojure -T:build uber -> gera o uberjar em target/
+  :build
+  {:deps       {io.github.clojure/tools.build {:mvn/version "0.10.5"}}
+   :ns-default build}}}
