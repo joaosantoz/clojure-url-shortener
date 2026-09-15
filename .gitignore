@@ -1,0 +1,18 @@
+# Artefatos de build
+/target/
+*.jar
+
+# Cache do Clojure CLI
+.cpcache/
+.clj-kondo/.cache/
+.lsp/.cache/
+
+# Editores
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
