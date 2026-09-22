@@ -50,20 +50,27 @@
 (defn shorten!
   "Encurta uma URL. A mesma URL sempre devolve o mesmo codigo.
 
+  A busca pelo codigo ja existente acontece dentro do `swap!` para que duas
+  requisicoes concorrentes com a mesma URL nao gerem codigos diferentes.
+
   Devolve {:id ... :url ... :created? bool} ou {:error :invalid-url}."
   [store url]
   (if-not (valid-url? url)
     {:error :invalid-url}
-    (if-let [existing (find-existing-id (:links @store) url)]
-      {:id existing :url url :created? false}
-      (let [{:keys [last-id]}
-            (swap! store
-                   (fn [{:keys [counter links]}]
+    (let [{:keys [last-id last-created?]}
+          (swap! store
+                 (fn [{:keys [counter links]}]
+                   (if-let [existing (find-existing-id links url)]
+                     {:counter       counter
+                      :links         links
+                      :last-id       existing
+                      :last-created? false}
                      (let [id (encode-base62 counter)]
-                       {:counter (inc counter)
-                        :links   (assoc links id url)
-                        :last-id id})))]
-        {:id last-id :url url :created? true}))))
+                       {:counter       (inc counter)
+                        :links         (assoc links id url)
+                        :last-id       id
+                        :last-created? true}))))]
+      {:id last-id :url url :created? last-created?})))
 
 (defn resolve-id
   "Devolve a URL original de um codigo, ou nil se ele nao existir."
