@@ -65,3 +65,38 @@
     (store/shorten! s "https://b.com")
     (is (= {"0" "https://a.com" "1" "https://b.com"}
            (store/list-links s)))))
+
+(deftest encode-base62-unicidade-test
+  (testing "nao repete codigos ao longo de uma faixa grande"
+    (let [codigos (map store/encode-base62 (range 5000))]
+      (is (= 5000 (count (distinct codigos))))
+      (is (every? #(re-matches #"[0-9a-zA-Z]+" %) codigos))))
+
+  (testing "o tamanho do codigo cresce junto com o contador"
+    (is (= 1 (count (store/encode-base62 61))))
+    (is (= 2 (count (store/encode-base62 62))))
+    (is (= 2 (count (store/encode-base62 3843))))
+    (is (= 3 (count (store/encode-base62 3844))))))
+
+(deftest shorten-concorrente-test
+  (testing "a mesma URL encurtada por varias threads gera um unico codigo"
+    (let [s        (store/new-store)
+          url      "https://www.pucpr.br"
+          inicio   (java.util.concurrent.CountDownLatch. 1)
+          tarefas  (doall (repeatedly 200 #(future (.await inicio)
+                                                   (store/shorten! s url))))]
+      (.countDown inicio)
+      (let [ids (set (map (comp :id deref) tarefas))]
+        (is (= 1 (count ids)) "todas as threads devem receber o mesmo codigo")
+        (is (= 1 (store/count-links s)) "o store nao pode guardar duplicatas"))))
+
+  (testing "URLs distintas em paralelo recebem codigos distintos"
+    (let [s       (store/new-store)
+          inicio  (java.util.concurrent.CountDownLatch. 1)
+          tarefas (doall (for [i (range 200)]
+                           (future (.await inicio)
+                                   (store/shorten! s (str "https://exemplo.com/" i)))))]
+      (.countDown inicio)
+      (let [ids (set (map (comp :id deref) tarefas))]
+        (is (= 200 (count ids)))
+        (is (= 200 (store/count-links s)))))))
