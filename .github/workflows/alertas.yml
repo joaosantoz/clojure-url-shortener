@@ -1,0 +1,86 @@
+name: Alertas
+
+# Envio de alertas: este workflow fica de olho no resultado dos pipelines de CI
+# e CD. Quando um deles termina em falha, ele abre uma issue no repositorio
+# mencionando e atribuindo o responsavel -- e e essa atribuicao que faz o GitHub
+# disparar a notificacao (e-mail + caixa de notificacoes) para a pessoa.
+#
+# O gatilho workflow_dispatch permite testar o canal de alertas manualmente,
+# sem precisar quebrar o pipeline de proposito.
+on:
+  workflow_run:
+    workflows: ["CI", "CD"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: "Motivo do disparo manual do alerta"
+        required: false
+        default: "Teste manual do canal de alertas"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  alerta-de-falha:
+    name: Alerta de falha no pipeline
+    # Dispara no teste manual ou quando o workflow observado falhou.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Abrir issue de alerta e notificar o responsavel
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const manual = context.eventName === 'workflow_dispatch';
+            const run = context.payload.workflow_run;
+            const dono = context.repo.owner;
+
+            const titulo = manual
+              ? '[ALERTA] Teste manual do canal de alertas'
+              : `[ALERTA] O workflow "${run.name}" falhou na branch ${run.head_branch}`;
+
+            const corpo = manual
+              ? [
+                  `@${dono} este e um disparo manual do canal de alertas.`,
+                  '',
+                  `**Motivo:** ${context.payload.inputs.motivo || 'nao informado'}`,
+                  `**Disparado por:** @${context.actor}`,
+                  '',
+                  'Se voce esta lendo isto por e-mail ou pela caixa de notificacoes,',
+                  'o canal de alertas esta funcionando.'
+                ].join('\n')
+              : [
+                  `@${dono} um pipeline falhou e precisa da sua atencao.`,
+                  '',
+                  `| Campo | Valor |`,
+                  `| --- | --- |`,
+                  `| Workflow | ${run.name} |`,
+                  `| Resultado | ${run.conclusion} |`,
+                  `| Branch | \`${run.head_branch}\` |`,
+                  `| Commit | ${run.head_sha.substring(0, 7)} |`,
+                  `| Autor | @${run.actor.login} |`,
+                  `| Execucao | ${run.html_url} |`,
+                  '',
+                  'Abra o log da execucao acima para ver qual passo quebrou.'
+                ].join('\n');
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: titulo,
+              body: corpo,
+              labels: ['alerta', 'ci-cd']
+            });
+
+            // A atribuicao e o que garante a notificacao por e-mail.
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.data.number,
+              assignees: [dono]
+            });
+
+            core.notice(`Alerta enviado: issue #${issue.data.number} - ${issue.data.html_url}`);
