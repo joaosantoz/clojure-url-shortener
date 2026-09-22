@@ -32,7 +32,9 @@ jobs:
       - name: Instalar Clojure CLI
         uses: DeLaGuardo/setup-clojure@13.7.0
         with:
-          cli: latest
+          # Versao fixa: com "latest" o CLI pode apontar para uma versao base do
+          # Clojure que ainda nao foi publicada no Maven Central, quebrando o build.
+          cli: 1.12.4.1618
 
       - name: Cache das dependencias
         uses: actions/cache@v4
