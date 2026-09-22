@@ -94,3 +94,28 @@
   (testing "DELETE em qualquer rota devolve 405"
     (let [resposta ((new-app) (request :delete "/health"))]
       (is (= 405 (:status resposta))))))
+
+(deftest base-url-configurado-test
+  (testing "a opcao :base-url tem prioridade sobre o host da requisicao"
+    (let [app      (handler/app (store/new-store) {:base-url "https://curto.pucpr.br"})
+          corpo    (body->map (app (request :post "/shorten" {:url "https://clojure.org"})))]
+      (is (= "https://curto.pucpr.br/0" (:short_url corpo)))))
+
+  (testing "sem a opcao, o short_url usa o host da propria requisicao"
+    (let [app   (handler/app (store/new-store) {:base-url ""})
+          corpo (body->map (app (request :post "/shorten" {:url "https://clojure.org"})))]
+      (is (= "http://localhost:3000/0" (:short_url corpo))))))
+
+(deftest json-malformado-test
+  (testing "corpo que nao e JSON valido devolve 400"
+    (let [quebrado (assoc (request :post "/shorten")
+                          :body (ByteArrayInputStream. (.getBytes "{isso nao e json" "UTF-8")))
+          resposta ((new-app) quebrado)]
+      (is (= 400 (:status resposta)))
+      (is (some? (:error (body->map resposta))))))
+
+  (testing "JSON valido que nao e um objeto devolve 400"
+    (let [lista    (assoc (request :post "/shorten")
+                          :body (ByteArrayInputStream. (.getBytes "[1,2,3]" "UTF-8")))
+          resposta ((new-app) lista)]
+      (is (= 400 (:status resposta))))))
