@@ -1,24 +1,30 @@
 (ns url-shortener.core
   "Ponto de entrada da aplicacao."
   (:gen-class)
-  (:require [ring.adapter.jetty :as jetty]
+  (:require [clojure.string :as str]
+            [ring.adapter.jetty :as jetty]
             [url-shortener.handler :as handler]
             [url-shortener.store :as store]))
 
-(defn- env-port
-  "Porta lida da variavel de ambiente PORT (padrao 3000)."
-  []
+(def porta-padrao 3000)
+
+(defn parse-port
+  "Converte o valor bruto da variavel de ambiente PORT em uma porta valida.
+
+  Devolve `porta-padrao` quando o valor e nulo, vazio, nao numerico ou esta
+  fora da faixa 1-65535."
+  [raw]
   (try
-    (Integer/parseInt (or (System/getenv "PORT") "3000"))
-    (catch NumberFormatException _
-      (println "PORT invalida, usando 3000")
-      3000)))
+    (let [n (Integer/parseInt (str/trim (or raw "")))]
+      (if (<= 1 n 65535) n porta-padrao))
+    (catch Exception _ porta-padrao)))
 
 (defn -main
   [& _args]
-  (let [port  (env-port)
-        store (store/new-store)]
+  (let [port  (parse-port (System/getenv "PORT"))
+        store (store/new-store)
+        opts  {:base-url (System/getenv "BASE_URL")}]
     (println (str "url-shortener v" handler/app-version
                   " ouvindo em http://0.0.0.0:" port))
-    (jetty/run-jetty (handler/app store)
+    (jetty/run-jetty (handler/app store opts)
                      {:port port :host "0.0.0.0" :join? true})))
